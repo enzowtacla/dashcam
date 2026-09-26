@@ -1,7 +1,7 @@
-import {useRef, useState} from 'react'
+import {useEffect, useRef, useState} from 'react'
 import './App.css'
-import {supabase} from './lib/supabase'
-type Fingerprint = {sequenceNumber: number, timeStamp: string, hash: string}
+import {sendFingerprint, type Fingerprint,} from './services/fingerprint'
+import { addToOfflineQueue, flushOfflineQueue} from './services/offlineQueue'
 
 function App() {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -14,6 +14,21 @@ function App() {
   const [sessionId, setSessionId] = useState<string | null>(null) //Session ID for the current recording session
   const sequenceNumberRef = useRef<number>(0) //Sequence number for the fingerprints
 
+  useEffect(()=>{
+    async function handleOnline(){
+      console.log('Internet connection restored')
+
+      await flushOfflineQueue()
+
+      console.log('Offline queue processed')
+    }
+
+    window.addEventListener('online', handleOnline)
+
+    return ()=>{
+      window.removeEventListener('online', handleOnline)
+    }
+  }, [])
   async function startCamera() {
     try{
       //Access to the camera
@@ -73,34 +88,33 @@ function App() {
     const hashBuffer = await crypto.subtle.digest('SHA-256', frameData)
     const hashArray = Array.from(new Uint8Array(hashBuffer))
     const hashHex = hashArray.map((byte) => byte.toString(16).padStart(2, '0')).join('')
-    const timeStamp = new Date().toISOString()
+    const timestamp = new Date().toISOString()
 
     sequenceNumberRef.current += 1
-
-    const fingerprint: Fingerprint = {
-      sequenceNumber: sequenceNumberRef.current,
-      timeStamp,
-      hash: hashHex
-    }
 
     if(!sessionId) {
       console.error('No active session')
       return
     }
 
-    const {error} = await supabase.from('fingerprints').insert({
-      session_id: sessionId,
-      sequence_number: fingerprint.sequenceNumber,
-      timestamp: fingerprint.timeStamp,
-      hash: fingerprint.hash
-    })
-
-    if(error){
-      console.error('Failed to send fingerprint:', error)
-      return
+    const fingerprint: Fingerprint = {
+      sessionId,
+      sequenceNumber: sequenceNumberRef.current,
+      timestamp,
+      hash: hashHex,
     }
 
-    console.log('Fingerprint sent:', fingerprint)
+    try {
+      await sendFingerprint(fingerprint)
+      console.log('Fingerprint sent to cloud:', fingerprint)
+    } 
+    catch (error) {
+      console.error('Failed to send fingerprint:', error)
+
+      await addToOfflineQueue(fingerprint)
+
+      console.log('Fingerprint queued for later transmission')
+    }
   }
 
   function startRecording() {
