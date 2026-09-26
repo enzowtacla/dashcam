@@ -1,5 +1,6 @@
 import {useRef, useState} from 'react'
 import './App.css'
+import {supabase} from './lib/supabase'
 type Fingerprint = {sequenceNumber: number, timeStamp: string, hash: string}
 
 function App() {
@@ -82,7 +83,24 @@ function App() {
       hash: hashHex
     }
 
-    console.log('Frame fingerprint:', fingerprint)
+    if(!sessionId) {
+      console.error('No active session')
+      return
+    }
+
+    const {error} = await supabase.from('fingerprints').insert({
+      session_id: sessionId,
+      sequence_number: fingerprint.sequenceNumber,
+      timestamp: fingerprint.timeStamp,
+      hash: fingerprint.hash
+    })
+
+    if(error){
+      console.error('Failed to send fingerprint:', error)
+      return
+    }
+
+    console.log('Fingerprint sent:', fingerprint)
   }
 
   function startRecording() {
