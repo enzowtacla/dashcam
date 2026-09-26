@@ -1,7 +1,7 @@
 import {useEffect, useRef, useState} from 'react'
 import './App.css'
 import {sendFingerprint, type Fingerprint,} from './services/fingerprint'
-import { addToOfflineQueue, flushOfflineQueue} from './services/offlineQueue'
+import { addToOfflineQueue, flushOfflineQueue, removeExpiredFingerprints} from './services/offlineQueue'
 
 function App() {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -12,16 +12,28 @@ function App() {
   const [framesProcessed, setFramesProcessed] = useState(0) //Fingerprints were generated
   const recordingIntervalRef = useRef<number | null>(null) //1 second timer
   const [sessionId, setSessionId] = useState<string | null>(null) //Session ID for the current recording session
+  const sessionIdRef = useRef<string | null>(null)
   const sequenceNumberRef = useRef<number>(0) //Sequence number for the fingerprints
 
   useEffect(()=>{
+    async function initializeOfflineQueue() {
+      await removeExpiredFingerprints()
+
+      if (navigator.onLine) {
+        await flushOfflineQueue()
+      }
+    }
+
     async function handleOnline(){
       console.log('Internet connection restored')
 
+      await removeExpiredFingerprints()
       await flushOfflineQueue()
 
       console.log('Offline queue processed')
     }
+
+    initializeOfflineQueue()
 
     window.addEventListener('online', handleOnline)
 
@@ -29,6 +41,7 @@ function App() {
       window.removeEventListener('online', handleOnline)
     }
   }, [])
+  
   async function startCamera() {
     try{
       //Access to the camera
@@ -92,13 +105,15 @@ function App() {
 
     sequenceNumberRef.current += 1
 
-    if(!sessionId) {
+    const currentSessionId = sessionIdRef.current
+
+    if(!currentSessionId) {
       console.error('No active session')
       return
     }
 
     const fingerprint: Fingerprint = {
-      sessionId,
+      sessionId: currentSessionId,
       sequenceNumber: sequenceNumberRef.current,
       timestamp,
       hash: hashHex,
@@ -121,6 +136,7 @@ function App() {
     if(!cameraActive || recording){return}
 
     const newSessionId = crypto.randomUUID()
+    sessionIdRef.current = newSessionId
     setSessionId(newSessionId)
     sequenceNumberRef.current = 0
 
