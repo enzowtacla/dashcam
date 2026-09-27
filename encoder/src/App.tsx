@@ -138,38 +138,40 @@ function App() {
   const sequenceNumber = sequenceNumberRef.current
   const timestamp = new Date().toISOString()
 
-  const framePath = await uploadFrame(frameBlob, driverId.trim(), currentSessionId, sequenceNumber)
+    try {
+      const framePath = await uploadFrame(frameBlob, driverId.trim(), currentSessionId,sequenceNumber)
 
-  console.log('Frame uploaded:', framePath)
+      console.log('Frame uploaded:', framePath)
 
-  const fingerprint: Fingerprint = {
-    driverId: driverId.trim(),
-    sessionId: currentSessionId,
-    sequenceNumber,
-    timestamp,
-    hash: hashHex,
-    framePath,
-  }
+      const fingerprint: Fingerprint = {
+        driverId: driverId.trim(),
+        sessionId: currentSessionId,
+        sequenceNumber,
+        timestamp,
+        hash: hashHex,
+        framePath,
+      }
 
-  try {
-    await sendFingerprint(fingerprint)
+      await sendFingerprint(fingerprint)
 
-    console.log(
-      'Fingerprint sent to cloud:',
-      fingerprint,
-    )
-  } catch (error) {
-    console.error(
-      'Failed to send fingerprint:',
-      error,
-    )
+      console.log('Fingerprint sent to cloud:', fingerprint)
+    }
+    catch (error) {
+      console.error('Cloud transmission failed:', error)
 
-    await addToOfflineQueue(fingerprint)
+      const offlineFingerprint: Fingerprint = {
+        driverId: driverId.trim(),
+        sessionId: currentSessionId,
+        sequenceNumber,
+        timestamp,
+        hash: hashHex,
+        framePath: '',
+      }
 
-    console.log(
-      'Fingerprint queued for later transmission',
-    )
-  }
+      await addToOfflineQueue(offlineFingerprint, frameBlob)
+
+      console.log('Frame and fingerprint queued for later transmission')
+    }
 
   //setLastTimestamp(timestamp)
   //setLastHash(hashHex)

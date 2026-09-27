@@ -1,15 +1,20 @@
-import { database } from '../db/localDB'
-import type { Fingerprint } from './fingerprint'
-import { sendFingerprint } from './fingerprint'
+import {database,  type PendingFingerprint} from '../db/localDB'
+import type {Fingerprint} from './fingerprint'
+import {sendFingerprint} from './fingerprint'
+import {uploadFrame} from './frameStorage'
 
 const OFFLINE_RETENTION_MS = 24 * 60 * 60 * 1000
 
-export async function addToOfflineQueue(
-  fingerprint: Fingerprint,
-): Promise<void> {
-  await database.pendingFingerprints.add({...fingerprint, queuedAt: new Date().toISOString()})
+export async function addToOfflineQueue(fingerprint: Fingerprint, frameBlob: Blob): Promise<void> {
+  const pendingFingerprint: PendingFingerprint = {
+    ...fingerprint,
+    frameBlob,
+    queuedAt: new Date().toISOString(),
+  }
 
-  console.log('Fingerprint saved locally:', fingerprint)
+  await database.pendingFingerprints.add(pendingFingerprint)
+
+  console.log('Frame and Fingerprint saved locally:', fingerprint)
 }
 
 export async function getPendingFingerprints() {
@@ -18,9 +23,7 @@ export async function getPendingFingerprints() {
     .toArray()
 }
 
-export async function removeFromOfflineQueue(
-  id: number,
-): Promise<void> {
+export async function removeFromOfflineQueue(id: number,): Promise<void> {
   await database.pendingFingerprints.delete(id)
 }
 
@@ -55,20 +58,30 @@ export async function flushOfflineQueue(): Promise<void> {
     }
 
     try {
-      await sendFingerprint(fingerprint)
+      const framePath = await uploadFrame(
+        fingerprint.frameBlob,
+        fingerprint.driverId,
+        fingerprint.sessionId,
+        fingerprint.sequenceNumber,
+      )
+
+      console.log('Pending frame uploaded:', framePath)
+
+      await sendFingerprint({
+        driverId: fingerprint.driverId,
+        sessionId: fingerprint.sessionId,
+        sequenceNumber: fingerprint.sequenceNumber,
+        timestamp: fingerprint.timestamp,
+        hash: fingerprint.hash,
+        framePath,
+      })
 
       await removeFromOfflineQueue(fingerprint.id)
 
-      console.log(
-        'Pending fingerprint sent:',
-        fingerprint.sequenceNumber,
-      )
-    } catch (error) {
-      console.error(
-        'Could not send pending fingerprint:',
-        error,
-      )
-
+      console.log('Pending frame and fingerprint sent:', fingerprint.sequenceNumber)
+    }
+    catch (error) {
+      console.error('Could not send pending frame:', error)
       break
     }
   }
