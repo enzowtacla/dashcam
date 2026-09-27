@@ -14,6 +14,9 @@ function App() {
   const [sessionId, setSessionId] = useState<string | null>(null) //Session ID for the current recording session
   const sessionIdRef = useRef<string | null>(null)
   const sequenceNumberRef = useRef<number>(0) //Sequence number for the fingerprints
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null) //Recording the video stream
+  const recordedChunksRef = useRef<Blob[]>([]) //Store the recorded video chunks
+  const streamRef = useRef<MediaStream | null>(null)
 
   useEffect(()=>{
     async function initializeOfflineQueue() {
@@ -46,6 +49,7 @@ function App() {
     try{
       //Access to the camera
       const stream = await navigator.mediaDevices.getUserMedia({video: true})
+      streamRef.current = stream
       
       if (videoRef.current){
         //Access the video stream and set it as the source for the video element
@@ -132,6 +136,55 @@ function App() {
     }
   }
 
+  function startVideoRecording(){
+    const stream = streamRef.current
+
+    if(!stream){
+      console.error('No camera stream available')
+      return
+    }
+
+    recordedChunksRef.current = []
+
+    const mediaRecorder = new MediaRecorder(stream, {mimeType: 'video/webm'})
+    
+    mediaRecorder.ondataavailable = (event) => {
+      if(event.data.size > 0){
+        recordedChunksRef.current.push(event.data)
+      }
+    }
+
+    mediaRecorder.start()
+
+    mediaRecorderRef.current = mediaRecorder
+
+    console.log('Video recording started')
+  }
+
+  function stopVideoRecording(){
+    const mediaRecorder = mediaRecorderRef.current
+
+    if(!mediaRecorder || mediaRecorder.state === 'inactive'){
+      return
+    }
+
+    mediaRecorder.onstop = async () => {
+      const videoBlob = new Blob(recordedChunksRef.current, {type: 'video/webm',})
+      const videoUrl = URL.createObjectURL(videoBlob)
+      const link = document.createElement('a')
+
+      link.href = videoUrl
+      link.download = `dashcam_${sessionIdRef.current}.webm`
+      link.click()
+
+      URL.revokeObjectURL(videoUrl)
+      recordedChunksRef.current = []
+
+      console.log('Video recording stopped and saved')
+    }
+
+    mediaRecorder.stop()
+  }
   function startRecording() {
     if(!cameraActive || recording){return}
 
@@ -139,6 +192,7 @@ function App() {
     sessionIdRef.current = newSessionId
     setSessionId(newSessionId)
     sequenceNumberRef.current = 0
+    startVideoRecording()
 
     setFramesProcessed(0)
     setRecording(true)
@@ -155,6 +209,7 @@ function App() {
       recordingIntervalRef.current = null
     }
 
+    stopVideoRecording()
     setRecording(false)
   }
 
