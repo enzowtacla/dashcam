@@ -3,6 +3,7 @@ import './App.css'
 import {sendFingerprint, type Fingerprint,} from './services/fingerprint'
 import { addToOfflineQueue, flushOfflineQueue, removeExpiredFingerprints} from './services/offlineQueue'
 import { sendVideoIntegrity } from './services/videoIntegrity'
+import { uploadFrame } from './services/frameStorage'
 
 function App() {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -18,6 +19,7 @@ function App() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null) //Recording the video stream
   const recordedChunksRef = useRef<Blob[]>([]) //Store the recorded video chunks
   const streamRef = useRef<MediaStream | null>(null)
+  const [driverId, setDriverId] = useState('')
 
 
   useEffect(()=>{
@@ -79,64 +81,100 @@ function App() {
   }
 
   async function captureFrame() {
-    const video = videoRef.current
-    const canvas = canvasRef.current
+  const video = videoRef.current
+  const canvas = canvasRef.current
+  const currentSessionId = sessionIdRef.current
 
-    if(!video || !canvas){return}
-
-    const context = canvas.getContext('2d')
-    
-    if(!context){return}
-
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-
-    //Copy what is currently being displayed in the video element to the canvas
-    context.drawImage(video, 0, 0, canvas.width, canvas.height)
-
-    const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, 'image/png')
-    })
-
-    if(!blob){
-      console.error('Could not convert frame to image')
-      return
-    }
-
-    const frameData = await blob.arrayBuffer()
-    const hashBuffer = await crypto.subtle.digest('SHA-256', frameData)
-    const hashArray = Array.from(new Uint8Array(hashBuffer))
-    const hashHex = hashArray.map((byte) => byte.toString(16).padStart(2, '0')).join('')
-    const timestamp = new Date().toISOString()
-
-    sequenceNumberRef.current += 1
-
-    const currentSessionId = sessionIdRef.current
-
-    if(!currentSessionId) {
-      console.error('No active session')
-      return
-    }
-
-    const fingerprint: Fingerprint = {
-      sessionId: currentSessionId,
-      sequenceNumber: sequenceNumberRef.current,
-      timestamp,
-      hash: hashHex,
-    }
-
-    try {
-      await sendFingerprint(fingerprint)
-      console.log('Fingerprint sent to cloud:', fingerprint)
-    } 
-    catch (error) {
-      console.error('Failed to send fingerprint:', error)
-
-      await addToOfflineQueue(fingerprint)
-
-      console.log('Fingerprint queued for later transmission')
-    }
+  if (!video || !canvas) {
+    console.error('Video or canvas not available')
+    return
   }
+
+  if (!currentSessionId) {
+    console.error('No active session')
+    return
+  }
+
+  if (!driverId.trim()) {
+    console.error('No Driver ID available')
+    return
+  }
+
+  const context = canvas.getContext('2d')
+
+  if (!context) {
+    console.error('Could not get canvas context.')
+    return
+  }
+
+  canvas.width = video.videoWidth
+  canvas.height = video.videoHeight
+
+  context.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+  const frameBlob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          resolve(blob)
+        } else {
+          reject(new Error('Failed to create JPEG frame.'))
+        }
+      },
+      'image/jpeg',0.9
+    )
+  })
+
+  const frameBuffer = await frameBlob.arrayBuffer()
+
+  const hashBuffer = await crypto.subtle.digest('SHA-256', frameBuffer)
+
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+
+  const hashHex = hashArray.map((byte) => byte.toString(16).padStart(2, '0')).join('')
+
+  sequenceNumberRef.current += 1
+
+  const sequenceNumber = sequenceNumberRef.current
+  const timestamp = new Date().toISOString()
+
+  const framePath = await uploadFrame(frameBlob, driverId.trim(), currentSessionId, sequenceNumber)
+
+  console.log('Frame uploaded:', framePath)
+
+  const fingerprint: Fingerprint = {
+    driverId: driverId.trim(),
+    sessionId: currentSessionId,
+    sequenceNumber,
+    timestamp,
+    hash: hashHex,
+    framePath,
+  }
+
+  try {
+    await sendFingerprint(fingerprint)
+
+    console.log(
+      'Fingerprint sent to cloud:',
+      fingerprint,
+    )
+  } catch (error) {
+    console.error(
+      'Failed to send fingerprint:',
+      error,
+    )
+
+    await addToOfflineQueue(fingerprint)
+
+    console.log(
+      'Fingerprint queued for later transmission',
+    )
+  }
+
+  //setLastTimestamp(timestamp)
+  //setLastHash(hashHex)
+  //setFrameCount(sequenceNumber)
+}
 
   function startVideoRecording(){
     const stream = streamRef.current
@@ -217,6 +255,11 @@ function App() {
   }
 
   function startRecording() {
+    if (!driverId.trim()) {
+      alert('Please enter a Driver ID before recording.')
+      return
+    }
+
     if(!cameraActive || recording){return}
 
     const newSessionId = crypto.randomUUID()
@@ -249,6 +292,21 @@ function App() {
       <h1>Dashcam encoder</h1>
 
       <p>Driver side video fingerprinting transmitter</p>
+
+      <div>
+        <label htmlFor="driverId">
+        Driver ID:
+        </label>
+
+        <input
+          id="driverId"
+          type="text"
+          value={driverId}
+          onChange={(event) => setDriverId(event.target.value)}
+          placeholder="e.g. DRIVER-001"
+          disabled={recording}
+        />
+      </div>
 
       <section>
         <h2>Camera</h2>

@@ -10,8 +10,10 @@ const database = new Dexie('dashcam-local') as Dexie & {
     pendingFingerprints: EntityTable<PendingFingerprint, 'id'>
 }
 
-database.version(1).stores({pendingFingerprints:'++id, sessionId, sequenceNumber, timestamp',})
+database.version(1).stores({pendingFingerprints:'++id, sessionId, sequenceNumber, timestamp'})
 
-database.version(2).stores({pendingFingerprints:'++id, sessionId, sequenceNumber, timestamp, queuedAt',})
+database.version(2).stores({pendingFingerprints:'++id, sessionId, sequenceNumber, timestamp, queuedAt'})
+
+database.version(3).stores({pendingFingerprints:'++id, driverId, sessionId, sequenceNumber, timestamp, queuedAt'})
 
 export{database}
