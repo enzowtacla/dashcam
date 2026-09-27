@@ -1,6 +1,6 @@
 import {useEffect, useState} from 'react'
 import './App.css'
-import {getDriverSessions, getSessionFrames, type DriverSession, type SessionFrame} from './services/sessions'
+import {getDriverSessions, getSessionFrames, type DriverSession} from './services/sessions'
 import {verifyFrame, type VerifiedFrame} from './services/frameVerification'
 
 function App() {
@@ -8,8 +8,6 @@ function App() {
   const [sessions, setSessions] = useState<DriverSession[]>([])
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
-  const [sessionFrames, setSessionFrames] = useState<SessionFrame[]>([])
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [verifiedFrames, setVerifiedFrames] = useState<VerifiedFrame[]>([])
   const [verifying, setVerifying] = useState(false)
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0)
@@ -26,11 +24,20 @@ function App() {
     setSearching(true)
     setSearchError(null)
     setSessions([])
+    setVerifiedFrames([])
 
     try {
       const result = await getDriverSessions(normalizedDriverId)
+
       setSessions(result)
-    }
+
+      if (result.length === 0) {
+        return
+      }
+
+      // Automatically open the most recent session
+      await handleOpenSession(result[0].sessionId)
+    } 
     catch (error) {
       console.error('Failed to load driver sessions:', error)
       setSearchError('Failed to load driver sessions')
@@ -46,9 +53,6 @@ function App() {
 
     try {
       const frames = await getSessionFrames(sessionId)
-
-      setSelectedSessionId(sessionId)
-      setSessionFrames(frames)
 
       const results: VerifiedFrame[] = []
 
@@ -152,24 +156,8 @@ function App() {
                 <strong>Frames:</strong>{' '}
                 {session.frameCount}
               </p>
-              <button
-                type="button"
-                onClick={() => handleOpenSession(session.sessionId)}
-              >
-                Open session
-              </button>
             </div>
           ))}
-        </section>
-      )}
-
-      {selectedSessionId && (
-        <section>
-          <h2>Selected session</h2>
-
-          <p><strong>Session ID:</strong>{' '}{selectedSessionId}</p>
-
-          <p><strong>Frames loaded:</strong>{' '}{sessionFrames.length}</p>
         </section>
       )}
 
