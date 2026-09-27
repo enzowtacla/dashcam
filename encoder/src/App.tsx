@@ -2,6 +2,7 @@ import {useEffect, useRef, useState} from 'react'
 import './App.css'
 import {sendFingerprint, type Fingerprint,} from './services/fingerprint'
 import { addToOfflineQueue, flushOfflineQueue, removeExpiredFingerprints} from './services/offlineQueue'
+import { sendVideoIntegrity } from './services/videoIntegrity'
 
 function App() {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -17,6 +18,7 @@ function App() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null) //Recording the video stream
   const recordedChunksRef = useRef<Blob[]>([]) //Store the recorded video chunks
   const streamRef = useRef<MediaStream | null>(null)
+
 
   useEffect(()=>{
     async function initializeOfflineQueue() {
@@ -145,16 +147,17 @@ function App() {
     }
 
     recordedChunksRef.current = []
+  
 
     const mediaRecorder = new MediaRecorder(stream, {mimeType: 'video/webm'})
     
     mediaRecorder.ondataavailable = (event) => {
-      if(event.data.size > 0){
+      if (event.data.size > 0) {
         recordedChunksRef.current.push(event.data)
       }
     }
 
-    mediaRecorder.start()
+    mediaRecorder.start(1000)
 
     mediaRecorderRef.current = mediaRecorder
 
@@ -170,6 +173,33 @@ function App() {
 
     mediaRecorder.onstop = async () => {
       const videoBlob = new Blob(recordedChunksRef.current, {type: 'video/webm',})
+      const videoBuffer = await videoBlob.arrayBuffer()
+      const hashBuffer = await crypto.subtle.digest('SHA-256', videoBuffer)
+      const hashArray = Array.from(new Uint8Array(hashBuffer))
+      const videoHash = hashArray.map((byte) => byte.toString(16).padStart(2,'0')).join('')
+      console.log('Final video fingerprint:', {
+        sessionId: sessionIdRef.current,
+        size: videoBlob.size,
+        hash: videoHash,
+      })
+      const currentSessionId = sessionIdRef.current
+
+
+      if (!currentSessionId) {
+        console.error('No session ID available for video integrity.')
+        return
+      }
+
+      try {
+        await sendVideoIntegrity({
+        sessionId: currentSessionId,
+        videoHash,
+        videoSize: videoBlob.size,
+      })
+
+      console.log('Final video fingerprint sent to cloud')} catch (error) {
+        console.error('Failed to send final video fingerprint:',error,)
+      }
       const videoUrl = URL.createObjectURL(videoBlob)
       const link = document.createElement('a')
 
@@ -185,6 +215,7 @@ function App() {
 
     mediaRecorder.stop()
   }
+
   function startRecording() {
     if(!cameraActive || recording){return}
 
