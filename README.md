@@ -65,8 +65,6 @@ VITE_SUPABASE_URL=your_supabase_project_url
 VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
 ```
 
-> Do not commit real `.env` files. Never place secret/service-role keys in these files.
-
 ### 2.2 Supabase Database
 
 In the **Supabase SQL Editor**, run:
