@@ -5,12 +5,12 @@ export type DriverSession = {sessionId: string, startedAt: string, frameCount: n
 type FingerprintSessionRow = {session_id: string, timestamp: string}
 
 export async function getDriverSessions(driverId: string,): Promise<DriverSession[]> {
-  const { data, error } = await supabase
+  const {data, error} = await supabase
     .from('fingerprints')
     .select('session_id, timestamp')
     .eq('driver_id', driverId)
     .not('frame_path', 'is', null)
-    .order('timestamp', { ascending: true })
+    .order('timestamp', {ascending: false})
 
   if (error) {
     throw error
