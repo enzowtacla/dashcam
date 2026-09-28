@@ -13,8 +13,8 @@ The project is composed of two independent React/Vite applications (`encoder/` a
 - Node.js (tested with 24.21.0)
 - npm (tested with 11.19.0)
 - Git
-- A modern web browser
-- A device with a camera (for the Encoder)
+- Web browser
+- A device with a camera
 - A Supabase account and project
 
 Verify the installation:
