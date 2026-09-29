@@ -1,19 +1,19 @@
 import {useEffect, useState} from 'react'
 import './App.css'
-import {getDriverSessions, getSessionFrames, type DriverSession} from './services/sessions'
-import {verifyFrame, type VerifiedFrame} from './services/frameVerification'
+import {getDriverSessions, getSessionFingerprints, type DriverSession} from './services/sessions'
+import {verifyFingerprint, type VerifiedFingerprint,} from './services/frameVerification'
 
 function App() {
   const [driverId, setDriverId] = useState('')
   const [sessions, setSessions] = useState<DriverSession[]>([])
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
-  const [verifiedFrames, setVerifiedFrames] = useState<VerifiedFrame[]>([])
+  const [verifiedFingerprints, setverifiedFingerprints] = useState<VerifiedFingerprint[]>([])
   const [verifying, setVerifying] = useState(false)
-  const [currentFrameIndex, setCurrentFrameIndex] = useState(0)
+  const [currentFingerprintIndex, setcurrentFingerprintIndex] = useState(0)
   const [playing, setPlaying] = useState(false)
-  const totalFrames = verifiedFrames.length
-  const validFrames = verifiedFrames.filter(
+  const totalFrames = verifiedFingerprints.length
+  const validFrames = verifiedFingerprints.filter(
     (frame) => frame.status === 'VALID',
   ).length
 
@@ -33,7 +33,7 @@ function App() {
     setSearching(true)
     setSearchError(null)
     setSessions([])
-    setVerifiedFrames([])
+    setverifiedFingerprints([])
 
     try {
       const result = await getDriverSessions(normalizedDriverId)
@@ -58,53 +58,109 @@ function App() {
 
   async function handleOpenSession(sessionId: string) {
     setVerifying(true)
-    setVerifiedFrames([])
+    setverifiedFingerprints([])
 
     try {
-      const frames = await getSessionFrames(sessionId)
+      const fingerprints =
+        await getSessionFingerprints(sessionId)
 
-      const results: VerifiedFrame[] = []
+      const results: VerifiedFingerprint[] = []
 
-      for (const frame of frames) {
-        const verified = await verifyFrame(frame)
+      let previousStoredChainHash: string | null = null
+      let expectedSequenceNumber = 1
+
+      for (const fingerprint of fingerprints) {
+        // Detect missing fingerprints before the current one
+        while (
+          expectedSequenceNumber < fingerprint.sequenceNumber
+        ) {
+          results.push({
+            sequenceNumber: expectedSequenceNumber,
+            timestamp: '',
+            hash: '',
+            chainHash: '',
+            calculatedChainHash: null,
+            valid: false,
+            status: 'MISSING',
+          })
+
+          console.log(
+            `Fingerprint ${expectedSequenceNumber}: MISSING`,
+          )
+
+          expectedSequenceNumber += 1
+        }
+
+        // Verify the fingerprint that actually exists
+        const verified = await verifyFingerprint(
+          fingerprint,
+          previousStoredChainHash,
+        )
 
         results.push(verified)
 
         console.log(
-          `Frame ${frame.sequenceNumber}:`,
-          verified.valid ? 'VALID' : 'MODIFIED',
+          `Fingerprint ${fingerprint.sequenceNumber}:`,
+          verified.status,
           {
-            expectedHash: frame.hash,
-            actualHash: verified.actualHash,
-            framePath: frame.framePath,
+            frameHash: fingerprint.hash,
+            storedChainHash: fingerprint.chainHash,
+            calculatedChainHash:
+              verified.calculatedChainHash,
           },
         )
+
+        // Use the stored chain hash to verify the next fingerprint
+        previousStoredChainHash =
+          fingerprint.chainHash
+
+        expectedSequenceNumber =
+          fingerprint.sequenceNumber + 1
       }
 
-      setVerifiedFrames(results)
+      setverifiedFingerprints(results)
 
-      console.log('Integrity verification completed:', {
-        total: results.length,
-        valid: results.filter((frame) => frame.valid).length,
-        invalid: results.filter((frame) => !frame.valid).length,
-      })
-    } 
+      console.log(
+        'Integrity verification completed:',
+        {
+          total: results.length,
+
+          valid: results.filter(
+            (fingerprint) =>
+              fingerprint.status === 'VALID',
+          ).length,
+
+          modified: results.filter(
+            (fingerprint) =>
+              fingerprint.status === 'MODIFIED',
+          ).length,
+
+          missing: results.filter(
+            (fingerprint) =>
+              fingerprint.status === 'MISSING',
+          ).length,
+        },
+      )
+    }
     catch (error) {
-      console.error('Failed to verify session:', error)
-    } 
+      console.error(
+        'Failed to verify session:',
+        error,
+      )
+    }
     finally {
       setVerifying(false)
     }
   }
 
   useEffect(() => {
-    if (!playing || verifiedFrames.length === 0) {
+    if (!playing || verifiedFingerprints.length === 0) {
       return
     }
 
     const interval = window.setInterval(() => {
-      setCurrentFrameIndex((current) => {
-        if (current >= verifiedFrames.length - 1) {
+      setcurrentFingerprintIndex((current) => {
+        if (current >= verifiedFingerprints.length - 1) {
           setPlaying(false)
           return 0
         }
@@ -116,7 +172,7 @@ function App() {
     return () => {
       window.clearInterval(interval)
     }
-  }, [playing, verifiedFrames.length])
+  }, [playing, verifiedFingerprints.length])
 
   return (
     <main>
@@ -163,7 +219,7 @@ function App() {
 
               <p>
                 <strong>Frames:</strong>{' '}
-                {session.frameCount}
+                {session.fingerprintCount}
               </p>
             </div>
           ))}
@@ -174,25 +230,25 @@ function App() {
         <p>Verifying frame integrity...</p>
       )}
 
-      {verifiedFrames.length > 0 && (
+      {verifiedFingerprints.length > 0 && (
         <section>
           <h2>Integrity verification</h2>
 
-          <p><strong>Total frames:</strong>{' '}{verifiedFrames.length}</p>
+          <p><strong>Total frames:</strong>{' '}{verifiedFingerprints.length}</p>
 
           <p>
             <strong>Valid:</strong>{' '}
-            {verifiedFrames.filter((frame) => frame.status === 'VALID').length}
+            {verifiedFingerprints.filter((frame) => frame.status === 'VALID').length}
           </p>
 
           <p>
             <strong>Modified:</strong>{' '}
-            {verifiedFrames.filter((frame) => frame.status === 'MODIFIED').length}
+            {verifiedFingerprints.filter((frame) => frame.status === 'MODIFIED').length}
           </p>
 
           <p>
             <strong>Missing:</strong>{' '}
-            {verifiedFrames.filter((frame) => frame.status === 'MISSING').length}
+            {verifiedFingerprints.filter((frame) => frame.status === 'MISSING').length}
           </p>
 
           <p>
@@ -205,14 +261,14 @@ function App() {
 
             <strong
               style={{
-                color: verifiedFrames.every(
+                color: verifiedFingerprints.every(
                   (frame) => frame.status === 'VALID',
                 )
                   ? 'green'
                   : 'red',
               }}
             >
-              {verifiedFrames.every(
+              {verifiedFingerprints.every(
                 (frame) => frame.status === 'VALID',
               )
                 ? 'VERIFIED'
@@ -221,52 +277,125 @@ function App() {
           </p>
 
           <div>
-            <h2>Dashcam reconstruction</h2>
+            <h2>Fingerprint verification</h2>
 
-            {verifiedFrames[currentFrameIndex] && (
+            {verifiedFingerprints[currentFingerprintIndex] && (
               <>
-                {verifiedFrames[currentFrameIndex].imageUrl ? (
-                  <img
-                    src={verifiedFrames[currentFrameIndex].imageUrl}
-                    alt={`Frame ${verifiedFrames[currentFrameIndex].sequenceNumber}`}
-                    width="640"
-                  />
+                {verifiedFingerprints[currentFingerprintIndex].status === 'MISSING' ? (
+                  <>
+                    <p>
+                      <strong>Fingerprint:</strong>{' '}
+                      {currentFingerprintIndex + 1} / {verifiedFingerprints.length}
+                    </p>
+
+                    <p>
+                      <strong>Sequence number:</strong>{' '}
+                      {verifiedFingerprints[currentFingerprintIndex].sequenceNumber}
+                    </p>
+
+                    <p>
+                      <strong style={{ color: 'red' }}>
+                        MISSING
+                      </strong>
+                    </p>
+
+                    <p>
+                      Fingerprint data is unavailable for this sequence number.
+                    </p>
+                  </>
                 ) : (
-                  <div><p>Frame unavailable</p></div>
+                  <>
+                    <p>
+                      <strong>Fingerprint:</strong>{' '}
+                      {currentFingerprintIndex + 1} / {verifiedFingerprints.length}
+                    </p>
+
+                    <p>
+                      <strong>Sequence number:</strong>{' '}
+                      {verifiedFingerprints[currentFingerprintIndex].sequenceNumber}
+                    </p>
+
+                    <p>
+                      <strong>Timestamp:</strong>{' '}
+                      {verifiedFingerprints[currentFingerprintIndex].timestamp}
+                    </p>
+
+                    <p>
+                      <strong>Frame hash:</strong>
+                    </p>
+
+                    <p style={{ wordBreak: 'break-all' }}>
+                      {verifiedFingerprints[currentFingerprintIndex].hash}
+                    </p>
+
+                    <p>
+                      <strong>Expected integrity proof:</strong>
+                    </p>
+
+                    <p style={{ wordBreak: 'break-all' }}>
+                      {verifiedFingerprints[currentFingerprintIndex].chainHash}
+                    </p>
+
+                    <p>
+                      <strong>Calculated integrity proof:</strong>
+                    </p>
+
+                    <p style={{ wordBreak: 'break-all' }}>
+                      {verifiedFingerprints[currentFingerprintIndex].calculatedChainHash ??
+                        'Not available'}
+                    </p>
+
+                    <p>
+                      <strong>Integrity: </strong>
+
+                      <strong
+                        style={{
+                          color:
+                            verifiedFingerprints[currentFingerprintIndex].status === 'VALID'
+                              ? 'green'
+                              : 'red',
+                        }}
+                      >
+                        {verifiedFingerprints[currentFingerprintIndex].status}
+                      </strong>
+                    </p>
+                  </>
                 )}
 
-                <p>Frame {currentFrameIndex + 1} / {verifiedFrames.length}</p>
-
-                <p>
-                  Integrity:{' '}
-                  <strong
-                    style={{
-                      color:
-                        verifiedFrames[currentFrameIndex].status === 'VALID'
-                          ? 'green'
-                          : 'red',
-                    }}
+                <div>
+                  <button
+                    onClick={() =>
+                      setcurrentFingerprintIndex((current) =>
+                        Math.max(0, current - 1),
+                      )
+                    }
+                    disabled={currentFingerprintIndex === 0}
                   >
-                    {verifiedFrames[currentFrameIndex].status}
-                  </strong>
-                </p>
+                    Previous
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCurrentFrameIndex(0)
-                    setPlaying(true)
-                  }}
-                >
-                  Play
-                </button>
+                  <button
+                    onClick={() => setPlaying((current) => !current)}
+                  >
+                    {playing ? 'Pause' : 'Play'}
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setPlaying(false)}
-                >
-                  Stop
-                </button>
+                  <button
+                    onClick={() =>
+                      setcurrentFingerprintIndex((current) =>
+                        Math.min(
+                          verifiedFingerprints.length - 1,
+                          current + 1,
+                        ),
+                      )
+                    }
+                    disabled={
+                      currentFingerprintIndex === verifiedFingerprints.length - 1
+                    }
+                  >
+                    Next
+                  </button>
+                </div>
               </>
             )}
           </div>

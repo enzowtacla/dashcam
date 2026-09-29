@@ -2,7 +2,6 @@ import {useEffect, useRef, useState} from 'react'
 import './App.css'
 import {sendFingerprint, type Fingerprint,} from './services/fingerprint'
 import { addToOfflineQueue, flushOfflineQueue, removeExpiredFingerprints} from './services/offlineQueue'
-import { uploadFrame } from './services/frameStorage'
 
 function App() {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -17,6 +16,7 @@ function App() {
   const sequenceNumberRef = useRef<number>(0) //Sequence number for the fingerprints
   const streamRef = useRef<MediaStream | null>(null)
   const [driverId, setDriverId] = useState('')
+  const previousChainHashRef = useRef<string | null>(null)
 
 
   useEffect(()=>{
@@ -77,6 +77,19 @@ function App() {
     }
   }
 
+  async function sha256Text(value: string): Promise<string> {
+    const encoded = new TextEncoder().encode(value)
+
+    const digest = await crypto.subtle.digest(
+      'SHA-256',
+      encoded,
+    )
+
+    return Array.from(new Uint8Array(digest))
+      .map((byte) => byte.toString(16).padStart(2, '0'))
+      .join('')
+  }
+
   async function captureFrame() {
     const video = videoRef.current
     const canvas = canvasRef.current
@@ -130,31 +143,44 @@ function App() {
 
     const hashHex = hashArray.map((byte) => byte.toString(16).padStart(2, '0')).join('')
 
+    const previousChainHash = previousChainHashRef.current
+
+    const chainInput =
+      previousChainHash === null
+        ? hashHex
+        : previousChainHash + hashHex
+
+    const chainHash = await sha256Text(chainInput)
+
+    previousChainHashRef.current = chainHash
+
     sequenceNumberRef.current += 1
 
     const sequenceNumber = sequenceNumberRef.current
     const timestamp = new Date().toISOString()
 
     try {
-      const framePath = await uploadFrame(frameBlob, driverId.trim(), currentSessionId, sequenceNumber)
-
-      console.log('Frame uploaded:', framePath)
-
       const fingerprint: Fingerprint = {
         driverId: driverId.trim(),
         sessionId: currentSessionId,
         sequenceNumber,
         timestamp,
         hash: hashHex,
-        framePath,
+        chainHash,
       }
 
       await sendFingerprint(fingerprint)
 
-      console.log('Fingerprint sent to cloud:', fingerprint)
+      console.log(
+        'Fingerprint sent to cloud:',
+        fingerprint,
+      )
     }
     catch (error) {
-      console.error('Cloud transmission failed:', error)
+      console.error(
+        'Cloud transmission failed:',
+        error,
+      )
 
       const offlineFingerprint: Fingerprint = {
         driverId: driverId.trim(),
@@ -162,12 +188,16 @@ function App() {
         sequenceNumber,
         timestamp,
         hash: hashHex,
-        framePath: '',
+        chainHash,
       }
 
-      await addToOfflineQueue(offlineFingerprint, frameBlob)
+      await addToOfflineQueue(
+        offlineFingerprint,
+      )
 
-      console.log('Frame and fingerprint queued for later transmission')
+      console.log(
+        'Fingerprint queued for later transmission',
+      )
     }
 
     //setLastTimestamp(timestamp)
@@ -187,6 +217,7 @@ function App() {
     sessionIdRef.current = newSessionId
     setSessionId(newSessionId)
     sequenceNumberRef.current = 0
+    previousChainHashRef.current = null
 
     setFramesProcessed(0)
     setRecording(true)

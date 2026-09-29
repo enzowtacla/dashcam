@@ -1,45 +1,54 @@
-import {supabase} from '../lib/supabase'
-import type {SessionFrame} from './sessions'
+import type { SessionFingerprint } from './sessions'
 
-export type FrameStatus = 'VALID' | 'MODIFIED' | 'MISSING'
-export type VerifiedFrame = SessionFrame & {actualHash: string | null, valid: boolean, imageUrl: string | null, status: FrameStatus}
+export type FingerprintStatus =
+  | 'VALID'
+  | 'MODIFIED'
+  | 'MISSING'
 
-async function calculateSHA256(blob: Blob): Promise<string> {
-  const buffer = await blob.arrayBuffer()
-
-  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer)
-
-  return Array.from(new Uint8Array(hashBuffer)).map((byte) => byte.toString(16).padStart(2, '0')).join('')
+export type VerifiedFingerprint = SessionFingerprint & {
+  calculatedChainHash: string | null
+  valid: boolean
+  status: FingerprintStatus
 }
 
-export async function verifyFrame(frame: SessionFrame,): Promise<VerifiedFrame> {
-  const { data, error } = await supabase.storage.from('dashcam-frames').download(frame.framePath)
+async function calculateSHA256(
+  value: string,
+): Promise<string> {
+  const encoded = new TextEncoder().encode(value)
 
-  if (error || !data) {
-    console.error(
-      `Frame ${frame.sequenceNumber} could not be downloaded:`,
-      error,
+  const hashBuffer = await crypto.subtle.digest(
+    'SHA-256',
+    encoded,
+  )
+
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((byte) =>
+      byte.toString(16).padStart(2, '0'),
     )
+    .join('')
+}
 
-    return {
-      ...frame,
-      actualHash: null,
-      valid: false,
-      imageUrl: null,
-      status: 'MISSING',
-    }
-  }
+export async function verifyFingerprint(
+  fingerprint: SessionFingerprint,
+  previousChainHash: string | null,
+): Promise<VerifiedFingerprint> {
+  const chainInput =
+    previousChainHash === null
+      ? fingerprint.hash
+      : previousChainHash + fingerprint.hash
 
-  const actualHash = await calculateSHA256(data)
+  const calculatedChainHash =
+    await calculateSHA256(chainInput)
 
-  const valid = actualHash === frame.hash
-  const imageUrl = URL.createObjectURL(data)
+  const valid =
+    calculatedChainHash === fingerprint.chainHash
 
   return {
-    ...frame,
-    actualHash,
+    ...fingerprint,
+    calculatedChainHash,
     valid,
-    imageUrl,
-    status: valid ? 'VALID' : 'MODIFIED',
+    status: valid
+      ? 'VALID'
+      : 'MODIFIED',
   }
 }

@@ -1,20 +1,27 @@
-import {database,  type PendingFingerprint} from '../db/localDB'
-import type {Fingerprint} from './fingerprint'
-import {sendFingerprint} from './fingerprint'
-import {uploadFrame} from './frameStorage'
+import {
+  database,
+  type PendingFingerprint,
+} from '../db/localDB'
+
+import type { Fingerprint } from './fingerprint'
+import { sendFingerprint } from './fingerprint'
 
 const OFFLINE_RETENTION_MS = 24 * 60 * 60 * 1000
 
-export async function addToOfflineQueue(fingerprint: Fingerprint, frameBlob: Blob): Promise<void> {
+export async function addToOfflineQueue(fingerprint: Fingerprint): Promise<void> {
   const pendingFingerprint: PendingFingerprint = {
     ...fingerprint,
-    frameBlob,
     queuedAt: new Date().toISOString(),
   }
 
-  await database.pendingFingerprints.add(pendingFingerprint)
+  await database.pendingFingerprints.add(
+    pendingFingerprint,
+  )
 
-  console.log('Frame and Fingerprint saved locally:', fingerprint)
+  console.log(
+    'Fingerprint saved locally:',
+    fingerprint,
+  )
 }
 
 export async function getPendingFingerprints() {
@@ -23,7 +30,9 @@ export async function getPendingFingerprints() {
     .toArray()
 }
 
-export async function removeFromOfflineQueue(id: number,): Promise<void> {
+export async function removeFromOfflineQueue(
+  id: number,
+): Promise<void> {
   await database.pendingFingerprints.delete(id)
 }
 
@@ -32,25 +41,36 @@ export async function getPendingCount(): Promise<number> {
 }
 
 export async function removeExpiredFingerprints(): Promise<number> {
-    const expirationTime = Date.now() - OFFLINE_RETENTION_MS
-    const expiredFingerprints = await database.pendingFingerprints
-    .where('queuedAt')
-    .below(new Date(expirationTime).toISOString())
-    .toArray()
+  const expirationTime =
+    Date.now() - OFFLINE_RETENTION_MS
 
-    for (const fingerprint of expiredFingerprints) {
-        if (fingerprint.id !== undefined) {
-            await database.pendingFingerprints.delete(fingerprint.id)
-        }
+  const expiredFingerprints =
+    await database.pendingFingerprints
+      .where('queuedAt')
+      .below(
+        new Date(expirationTime).toISOString(),
+      )
+      .toArray()
+
+  for (const fingerprint of expiredFingerprints) {
+    if (fingerprint.id !== undefined) {
+      await database.pendingFingerprints.delete(
+        fingerprint.id,
+      )
     }
+  }
 
-    console.log('Expired fingerprints removed:', expiredFingerprints.length,)
+  console.log(
+    'Expired fingerprints removed:',
+    expiredFingerprints.length,
+  )
 
   return expiredFingerprints.length
 }
 
 export async function flushOfflineQueue(): Promise<void> {
-  const pendingFingerprints = await getPendingFingerprints()
+  const pendingFingerprints =
+    await getPendingFingerprints()
 
   for (const fingerprint of pendingFingerprints) {
     if (fingerprint.id === undefined) {
@@ -58,30 +78,30 @@ export async function flushOfflineQueue(): Promise<void> {
     }
 
     try {
-      const framePath = await uploadFrame(
-        fingerprint.frameBlob,
-        fingerprint.driverId,
-        fingerprint.sessionId,
-        fingerprint.sequenceNumber,
-      )
-
-      console.log('Pending frame uploaded:', framePath)
-
       await sendFingerprint({
         driverId: fingerprint.driverId,
         sessionId: fingerprint.sessionId,
         sequenceNumber: fingerprint.sequenceNumber,
         timestamp: fingerprint.timestamp,
         hash: fingerprint.hash,
-        framePath,
+        chainHash: fingerprint.chainHash,
       })
 
-      await removeFromOfflineQueue(fingerprint.id)
+      await removeFromOfflineQueue(
+        fingerprint.id,
+      )
 
-      console.log('Pending frame and fingerprint sent:', fingerprint.sequenceNumber)
+      console.log(
+        'Pending fingerprint sent:',
+        fingerprint.sequenceNumber,
+      )
     }
     catch (error) {
-      console.error('Could not send pending frame:', error)
+      console.error(
+        'Could not send pending fingerprint:',
+        error,
+      )
+
       break
     }
   }

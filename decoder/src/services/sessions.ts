@@ -1,16 +1,15 @@
-import {supabase} from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 
-export type DriverSession = {sessionId: string, startedAt: string, frameCount: number}
+export type DriverSession = {sessionId: string, startedAt: string, fingerprintCount: number}
 
 type FingerprintSessionRow = {session_id: string, timestamp: string}
 
 export async function getDriverSessions(driverId: string,): Promise<DriverSession[]> {
-  const {data, error} = await supabase
+  const { data, error } = await supabase
     .from('fingerprints')
     .select('session_id, timestamp')
     .eq('driver_id', driverId)
-    .not('frame_path', 'is', null)
-    .order('timestamp', {ascending: false})
+    .order('timestamp', { ascending: false })
 
   if (error) {
     throw error
@@ -22,13 +21,12 @@ export async function getDriverSessions(driverId: string,): Promise<DriverSessio
     const existing = sessions.get(row.session_id)
 
     if (existing) {
-      existing.frameCount += 1
-    } 
-    else {
+      existing.fingerprintCount += 1
+    } else {
       sessions.set(row.session_id, {
         sessionId: row.session_id,
         startedAt: row.timestamp,
-        frameCount: 1,
+        fingerprintCount: 1,
       })
     }
   }
@@ -36,28 +34,29 @@ export async function getDriverSessions(driverId: string,): Promise<DriverSessio
   return Array.from(sessions.values())
 }
 
-export type SessionFrame = {sequenceNumber: number, timestamp: string, hash: string, framePath: string}
+export type SessionFingerprint = {sequenceNumber: number, timestamp: string, hash: string, chainHash: string}
 
-type SessionFrameRow = {sequence_number: number, timestamp: string, hash: string, frame_path: string}
+type SessionFingerprintRow = {sequence_number: number, timestamp: string, hash: string, chain_hash: string}
 
-export async function getSessionFrames(sessionId: string,): Promise<SessionFrame[]> {
-    const { data, error } = await supabase
-        .from('fingerprints')
-        .select(
-            'sequence_number, timestamp, hash, frame_path',
-        )
-        .eq('session_id', sessionId)
-        .not('frame_path', 'is', null)
-        .order('sequence_number', { ascending: true })
+export async function getSessionFingerprints(sessionId: string,): Promise<SessionFingerprint[]> {
+  const { data, error } = await supabase
+    .from('fingerprints')
+    .select(
+      'sequence_number, timestamp, hash, chain_hash',
+    )
+    .eq('session_id', sessionId)
+    .order('sequence_number', { ascending: true })
 
-    if (error) {
-        throw error
-    }
+  if (error) {
+    throw error
+  }
 
-    return ((data ?? []) as SessionFrameRow[]).map((row) => ({
-        sequenceNumber: row.sequence_number,
-        timestamp: row.timestamp,
-        hash: row.hash,
-        framePath: row.frame_path,
-    }))
+  return ((data ?? []) as SessionFingerprintRow[]).map(
+    (row) => ({
+      sequenceNumber: row.sequence_number,
+      timestamp: row.timestamp,
+      hash: row.hash,
+      chainHash: row.chain_hash,
+    }),
+  )
 }
