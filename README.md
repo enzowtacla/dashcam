@@ -68,9 +68,6 @@ FOR SELECT
 TO anon
 USING (true);
 ```
-
-> These anonymous policies are intended for the academic MVP only.
-
 ---
 
 ## 4. Configure Environment Variables
@@ -89,7 +86,7 @@ VITE_SUPABASE_URL=your_supabase_project_url
 VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
 ```
 
-Both values are in the Supabase project settings. Do not commit the `.env` files.
+Both values are in the Supabase project settings.
 
 ---
 
