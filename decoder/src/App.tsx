@@ -12,6 +12,15 @@ function App() {
   const [verifying, setVerifying] = useState(false)
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0)
   const [playing, setPlaying] = useState(false)
+  const totalFrames = verifiedFrames.length
+  const validFrames = verifiedFrames.filter(
+    (frame) => frame.status === 'VALID',
+  ).length
+
+  const integrityPercentage =
+    totalFrames > 0
+      ? (validFrames / totalFrames) * 100
+      : 0
 
   async function handleSearchDriver() {
     const normalizedDriverId = driverId.trim()
@@ -184,6 +193,11 @@ function App() {
           <p>
             <strong>Missing:</strong>{' '}
             {verifiedFrames.filter((frame) => frame.status === 'MISSING').length}
+          </p>
+
+          <p>
+            <strong>Overall integrity:</strong>{' '}
+            {integrityPercentage.toFixed(1)}%
           </p>
 
           <p>
