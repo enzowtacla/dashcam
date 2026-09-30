@@ -36,8 +36,6 @@ export async function getDriverSessions(driverId: string,): Promise<DriverSessio
 
 export type SessionFingerprint = {sequenceNumber: number, timestamp: string, hash: string, chainHash: string, perceptualHash: string | null}
 
-type SessionFingerprintRow = {sequence_number: number, timestamp: string, hash: string, chain_hash: string}
-
 export async function getSessionFingerprints(sessionId: string,): Promise<SessionFingerprint[]> {
   const { data, error } = await supabase
     .from('fingerprints')

@@ -49,15 +49,14 @@ function App() {
   const totalFrames = verifiedFingerprints.length
   const validFrames =verifiedFingerprints.filter((frame) => frame.status === 'VALID').length
   const integrityPercentage = totalFrames > 0 ? (validFrames / totalFrames) * 100 : 0
+  const [processingTimeMs, setProcessingTimeMs] = useState<number | null>(null)
 
   async function handleSearchDriver() {
     const normalizedDriverId =
       driverId.trim()
 
     if (!normalizedDriverId) {
-      setSearchError(
-        'Please enter a Driver ID',
-      )
+      setSearchError('Please enter a Driver ID')
       return
     }
 
@@ -71,9 +70,7 @@ function App() {
 
     try {
       const result =
-        await getDriverSessions(
-          normalizedDriverId,
-        )
+        await getDriverSessions(normalizedDriverId)
 
       setSessions(result)
 
@@ -82,28 +79,19 @@ function App() {
       }
 
       // Automatically verify the most recent session for this driver
-      await handleOpenSession(
-        result[0].sessionId,
-      )
+      await handleOpenSession(result[0].sessionId)
     }
     catch (error) {
-      console.error(
-        'Failed to load driver sessions:',
-        error,
-      )
+      console.error('Failed to load driver sessions:', error)
 
-      setSearchError(
-        'Failed to load driver sessions',
-      )
+      setSearchError('Failed to load driver sessions')
     }
     finally {
       setSearching(false)
     }
   }
 
-  async function handleOpenSession(
-    sessionId: string,
-  ) {
+  async function handleOpenSession(sessionId: string) {
     setVerifying(true)
     setVerifiedFingerprints([])
     setCurrentFingerprintIndex(0)
@@ -141,9 +129,7 @@ function App() {
             status: 'MISSING',
           })
 
-          console.log(
-            `Fingerprint ${expectedSequenceNumber}: MISSING`,
-          )
+          console.log(`Fingerprint ${expectedSequenceNumber}: MISSING`)
 
           expectedSequenceNumber += 1
         }
@@ -239,16 +225,13 @@ function App() {
     return () => {
       window.clearInterval(interval)
     }
-  }, [
-    playing,
-    verifiedFingerprints.length,
+  }, [playing, verifiedFingerprints.length
   ])
 
   async function handleVerifyVideo() {
-    if (!selectedVideo) {
-      setVideoMatchError(
-        'Please select a video first.',
-      )
+    const verificationStartTime = performance.now()
+
+    if (!selectedVideo) {setVideoMatchError('Please select a video first.')
       return
     }
 
@@ -273,14 +256,10 @@ function App() {
     const startTime = performance.now()
 
     try {
-      const videoFingerprints =
-        await extractVideoFingerprints(
-          selectedVideo,
-          1,
-        )
+      const videoFingerprints = await extractVideoFingerprints(selectedVideo, 1)
 
       if (videoFingerprints.length === 0) {
-        throw new Error('No fingerprints could be extracted from the video.',)
+        throw new Error('No fingerprints could be extracted from the video.')
       }
 
       const HAMMING_THRESHOLD = 10
@@ -354,47 +333,28 @@ function App() {
 
         const video = videoFingerprints[videoIndex]
 
-        const stored =
-          storedFingerprints[
-            storedIndex
-          ]
+        const stored = storedFingerprints[storedIndex]
 
-        if (
-          !stored.perceptualHash
-        ) {
+        if (!stored.perceptualHash) {
           continue
         }
 
-        const distance =
-          hammingDistance(
-            video.perceptualHash,
-            stored.perceptualHash,
-          )
+        const distance = hammingDistance(video.perceptualHash,stored.perceptualHash)
 
-        const similarity =
-          similarityPercentage(
-            video.perceptualHash,
-            stored.perceptualHash,
-          )
+        const similarity = similarityPercentage(video.perceptualHash, stored.perceptualHash)
 
         results.push({
-          videoIndex:
-            video.index,
+          videoIndex: video.index,
 
-          videoTime:
-            video.time,
+          videoTime: video.time,
 
-          sessionSequenceNumber:
-            stored.sequenceNumber,
+          sessionSequenceNumber: stored.sequenceNumber,
 
-          videoHash:
-            video.perceptualHash,
+          videoHash: video.perceptualHash,
 
-          storedHash:
-            stored.perceptualHash,
+          storedHash: stored.perceptualHash,
 
-          hammingDistance:
-            distance,
+          hammingDistance:distance,
 
           similarity,
 
@@ -438,9 +398,7 @@ function App() {
               0,
             ) / results.length
 
-      const processingTime =
-        performance.now() -
-        startTime
+      const processingTime = performance.now() - startTime
 
       setVideoMatch({
         totalVideoFingerprints:
@@ -457,30 +415,13 @@ function App() {
 
         averageHammingDistance,
 
-        startSequenceNumber:
-          results.length > 0
-            ? results[0]
-                .sessionSequenceNumber
-            : null,
+        startSequenceNumber: results.length > 0 ? results[0].sessionSequenceNumber: null,
 
-        endSequenceNumber:
-          results.length > 0
-            ? results[
-                results.length - 1
-              ].sessionSequenceNumber
-            : null,
+        endSequenceNumber:results.length > 0 ? results[results.length - 1].sessionSequenceNumber: null,
 
-        startVideoTime:
-          results.length > 0
-            ? results[0].videoTime
-            : null,
+        startVideoTime: results.length > 0 ? results[0].videoTime: null,
 
-        endVideoTime:
-          results.length > 0
-            ? results[
-                results.length - 1
-              ].videoTime
-            : null,
+        endVideoTime: results.length > 0 ? results[results.length - 1].videoTime: null,
 
         results,
       })
@@ -500,26 +441,19 @@ function App() {
       )
     }
     catch (error) {
-      console.error(
-        'Video matching failed:',
-        error,
-      )
+      console.error('Video matching failed:', error)
 
-      setVideoMatchError(
-        error instanceof Error
-          ? error.message
-          : 'Video matching failed.',
-      )
+      setVideoMatchError(error instanceof Error ? error.message: 'Video matching failed.')
     }
     finally {
       setMatchingVideo(false)
     }
+    const verificationEndTime = performance.now()
+
+    setProcessingTimeMs(verificationEndTime - verificationStartTime)
   }
 
-  const currentFingerprint =
-    verifiedFingerprints[
-      currentFingerprintIndex
-    ]
+  const currentFingerprint = verifiedFingerprints[currentFingerprintIndex]
 
   return (
     <main>
@@ -1093,10 +1027,7 @@ function App() {
                 </p>
 
                 <p>
-                  <strong>
-                    Matching session
-                    segment:
-                  </strong>{' '}
+                  <strong>Matching session segment:</strong>{' '}
                   {
                     videoMatch.startSequenceNumber
                   }
@@ -1105,10 +1036,14 @@ function App() {
                     videoMatch.endSequenceNumber
                   }
                 </p>
-
+                {processingTimeMs !== null && (
+                  <p>
+                    <strong>Processing time:</strong>{' '}
+                    {Math.round(processingTimeMs)} ms
+                  </p>
+                )}
                 <h3>
-                  Fingerprint
-                  comparison
+                  Fingerprint comparison
                 </h3>
 
                 <table>
@@ -1123,8 +1058,7 @@ function App() {
                       </th>
 
                       <th>
-                        Hamming
-                        distance
+                        Hamming distance
                       </th>
 
                       <th>
@@ -1144,9 +1078,7 @@ function App() {
                           key={`${result.videoIndex}-${result.sessionSequenceNumber}`}
                         >
                           <td>
-                            {result.videoTime.toFixed(
-                              2,
-                            )}
+                            {result.videoTime.toFixed(2)}
                             s
                           </td>
 
@@ -1173,14 +1105,10 @@ function App() {
                             <strong
                               style={{
                                 color:
-                                  result.matched
-                                    ? 'green'
-                                    : 'red',
+                                  result.matched ? 'green' : 'red',
                               }}
                             >
-                              {result.matched
-                                ? 'MATCH'
-                                : 'NO MATCH'}
+                              {result.matched ? 'MATCH' : 'NO MATCH'}
                             </strong>
                           </td>
                         </tr>
