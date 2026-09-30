@@ -34,16 +34,14 @@ export async function getDriverSessions(driverId: string,): Promise<DriverSessio
   return Array.from(sessions.values())
 }
 
-export type SessionFingerprint = {sequenceNumber: number, timestamp: string, hash: string, chainHash: string}
+export type SessionFingerprint = {sequenceNumber: number, timestamp: string, hash: string, chainHash: string, perceptualHash: string | null}
 
 type SessionFingerprintRow = {sequence_number: number, timestamp: string, hash: string, chain_hash: string}
 
 export async function getSessionFingerprints(sessionId: string,): Promise<SessionFingerprint[]> {
   const { data, error } = await supabase
     .from('fingerprints')
-    .select(
-      'sequence_number, timestamp, hash, chain_hash',
-    )
+    .select('sequence_number, timestamp, hash, chain_hash, perceptual_hash')
     .eq('session_id', sessionId)
     .order('sequence_number', { ascending: true })
 
@@ -51,12 +49,11 @@ export async function getSessionFingerprints(sessionId: string,): Promise<Sessio
     throw error
   }
 
-  return ((data ?? []) as SessionFingerprintRow[]).map(
-    (row) => ({
-      sequenceNumber: row.sequence_number,
-      timestamp: row.timestamp,
-      hash: row.hash,
-      chainHash: row.chain_hash,
-    }),
-  )
+  return (data ?? []).map((row) => ({
+    sequenceNumber: row.sequence_number,
+    timestamp: row.timestamp,
+    hash: row.hash,
+    chainHash: row.chain_hash,
+    perceptualHash: row.perceptual_hash,
+  }))
 }

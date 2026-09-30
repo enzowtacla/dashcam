@@ -6,13 +6,17 @@ import {
 import type { Fingerprint } from './fingerprint'
 import { sendFingerprint } from './fingerprint'
 
-const OFFLINE_RETENTION_MS = 24 * 60 * 60 * 1000
+const OFFLINE_RETENTION_MS =
+  24 * 60 * 60 * 1000
 
-export async function addToOfflineQueue(fingerprint: Fingerprint): Promise<void> {
-  const pendingFingerprint: PendingFingerprint = {
-    ...fingerprint,
-    queuedAt: new Date().toISOString(),
-  }
+export async function addToOfflineQueue(
+  fingerprint: Fingerprint,
+): Promise<void> {
+  const pendingFingerprint:
+    PendingFingerprint = {
+      ...fingerprint,
+      queuedAt: new Date().toISOString(),
+    }
 
   await database.pendingFingerprints.add(
     pendingFingerprint,
@@ -36,11 +40,13 @@ export async function removeFromOfflineQueue(
   await database.pendingFingerprints.delete(id)
 }
 
-export async function getPendingCount(): Promise<number> {
+export async function getPendingCount():
+Promise<number> {
   return database.pendingFingerprints.count()
 }
 
-export async function removeExpiredFingerprints(): Promise<number> {
+export async function removeExpiredFingerprints():
+Promise<number> {
   const expirationTime =
     Date.now() - OFFLINE_RETENTION_MS
 
@@ -48,15 +54,19 @@ export async function removeExpiredFingerprints(): Promise<number> {
     await database.pendingFingerprints
       .where('queuedAt')
       .below(
-        new Date(expirationTime).toISOString(),
+        new Date(
+          expirationTime,
+        ).toISOString(),
       )
       .toArray()
 
-  for (const fingerprint of expiredFingerprints) {
+  for (
+    const fingerprint
+    of expiredFingerprints
+  ) {
     if (fingerprint.id !== undefined) {
-      await database.pendingFingerprints.delete(
-        fingerprint.id,
-      )
+      await database.pendingFingerprints
+        .delete(fingerprint.id)
     }
   }
 
@@ -68,23 +78,41 @@ export async function removeExpiredFingerprints(): Promise<number> {
   return expiredFingerprints.length
 }
 
-export async function flushOfflineQueue(): Promise<void> {
+export async function flushOfflineQueue():
+Promise<void> {
   const pendingFingerprints =
     await getPendingFingerprints()
 
-  for (const fingerprint of pendingFingerprints) {
+  for (
+    const fingerprint
+    of pendingFingerprints
+  ) {
     if (fingerprint.id === undefined) {
       continue
     }
 
     try {
       await sendFingerprint({
-        driverId: fingerprint.driverId,
-        sessionId: fingerprint.sessionId,
-        sequenceNumber: fingerprint.sequenceNumber,
-        timestamp: fingerprint.timestamp,
-        hash: fingerprint.hash,
-        chainHash: fingerprint.chainHash,
+        driverId:
+          fingerprint.driverId,
+
+        sessionId:
+          fingerprint.sessionId,
+
+        sequenceNumber:
+          fingerprint.sequenceNumber,
+
+        timestamp:
+          fingerprint.timestamp,
+
+        hash:
+          fingerprint.hash,
+
+        chainHash:
+          fingerprint.chainHash,
+
+        perceptualHash:
+          fingerprint.perceptualHash,
       })
 
       await removeFromOfflineQueue(
