@@ -535,10 +535,6 @@ function App() {
 
     setRecording(true)
 
-    /*
-     * Capture the first fingerprint
-     * immediately.
-     */
     void captureFrame().then(() => {
       setFramesProcessed(
         (current) =>
@@ -546,10 +542,6 @@ function App() {
       )
     })
 
-    /*
-     * Then capture one fingerprint
-     * every second.
-     */
     recordingIntervalRef.current =
       window.setInterval(() => {
         void captureFrame().then(() => {
@@ -591,20 +583,22 @@ function App() {
     )
   }
 
-  return (
-    <main>
-      <h1>
-        Dashcam encoder
-      </h1>
+return (
+  <main className="app">
+    <header className="app-header">
+      <h1>Dashcam Encoder</h1>
 
       <p>
-        Driver side video
-        fingerprinting transmitter
+        Driver-side video fingerprinting transmitter
       </p>
+    </header>
 
-      <div>
+    <section className="card">
+      <h2>Driver</h2>
+
+      <div className="field">
         <label htmlFor="driverId">
-          Driver ID:
+          Driver ID
         </label>
 
         <input
@@ -620,36 +614,44 @@ function App() {
           disabled={recording}
         />
       </div>
+    </section>
 
-      <section>
-        <h2>
-          Camera
-        </h2>
+    <section className="card">
+      <div className="section-header">
+        <h2>Camera</h2>
 
+        <span
+          className={
+            cameraActive
+              ? 'status status-active'
+              : 'status'
+          }
+        >
+          {cameraActive
+            ? 'Active'
+            : 'Inactive'}
+        </span>
+      </div>
+
+      <div className="video-container">
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted
-          width="640"
         />
+      </div>
 
-        <canvas
-          ref={canvasRef}
-          width="640"
-          height="480"
-          style={{
-            display: 'none',
-          }}
-        />
+      <canvas
+        ref={canvasRef}
+        width="640"
+        height="480"
+        style={{
+          display: 'none',
+        }}
+      />
 
-        <p>
-          Status:{' '}
-          {cameraActive
-            ? 'Active'
-            : 'Inactive'}
-        </p>
-
+      <div className="actions">
         {!cameraActive ? (
           <button
             type="button"
@@ -666,56 +668,71 @@ function App() {
             Stop camera
           </button>
         )}
+      </div>
+    </section>
 
-        {cameraActive && (
-          <section>
-            <h2>
-              Recording
-            </h2>
+    {cameraActive && (
+      <section className="card">
+        <div className="section-header">
+          <h2>Recording session</h2>
 
-            <p>
-              Status:{' '}
-              {recording
-                ? 'Recording'
-                : 'Stopped'}
-            </p>
+          <span
+            className={
+              recording
+                ? 'status status-recording'
+                : 'status'
+            }
+          >
+            {recording
+              ? 'Recording'
+              : 'Stopped'}
+          </span>
+        </div>
 
-            {sessionId && (
-              <p>
-                Session ID:{' '}
-                {sessionId}
-              </p>
-            )}
+        <div className="session-info">
+          <div>
+            <span className="info-label">
+              Frames processed
+            </span>
 
-            <p>
-              Frames processed:{' '}
+            <strong>
               {framesProcessed}
-            </p>
+            </strong>
+          </div>
 
-            {!recording ? (
-              <button
-                type="button"
-                onClick={
-                  startRecording
-                }
-              >
-                Start recording
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={
-                  stopRecording
-                }
-              >
-                Stop recording
-              </button>
-            )}
-          </section>
-        )}
+          {sessionId && (
+            <div>
+              <span className="info-label">
+                Session ID
+              </span>
+
+              <strong className="session-id">
+                {sessionId}
+              </strong>
+            </div>
+          )}
+        </div>
+
+        <div className="actions">
+          {!recording ? (
+            <button
+              type="button"
+              onClick={startRecording}
+            >
+              Start recording
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={stopRecording}
+            >
+              Stop recording
+            </button>
+          )}
+        </div>
       </section>
-    </main>
-  )
+    )}
+  </main>
+)
 }
-
 export default App
